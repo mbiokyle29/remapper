@@ -7,7 +7,7 @@ Unoffical script for working with One Codex results files
 
 """
 
-import logging, argparse, os
+import logging, argparse, os, itertools
 from one_codex_result import OneCodexResult
 
 
@@ -41,10 +41,10 @@ def main():
     # args
     parser.add_argument("--tsv", help="Fullpath to the One Codex results file", required=True)
     parser.add_argument("--fastq", help="Fullpath to the original FASTQ file which was uploaded", required=True)
-    parser.add_argument("--threads", help="Number of worker threads for processing results", default=1)
+    parser.add_argument("--threads", help="Number of worker threads for processing results", default=1, type=int)
     parser.add_argument("--contains-ids", help="Conditionally select results which contain a given TAX ID", nargs='+')
     parser.add_argument("--or", help="treats the ids from contains-ids as OR", default=False)
-    parser.add_argument("--min-matched", help="Percentage of the read which matched a single tax ID", type=float)
+    parser.add_argument("--min-matched", help="Percentage of the read which matched given TAX id(s)", type=float)
 
     args = parser.parse_args()
     log.info(" remapper running with TSV: %s and FASTQ: %s", args.tsv, args.fastq)
@@ -53,6 +53,27 @@ def main():
     log.info(" reading in One Codex results...")
     results = read_results(args.tsv)
     log.info(" Read in %i results", len(results))
+
+    # split the results and pass off to workers
+    split_results(results, args.threads)
+
+def split_results(results, count):
+    
+    # store the new pieces here
+    chunks = []
+
+    # get chunks-1 equal sized chunks + one mod remainder sized
+    remainder = len(results) % count
+    count -= 1
+
+    # grab the unequal piece and add it
+    chunks.append(results[0:remainder])
+
+    # remove it from the main list
+    results = results[:-remainder]
+
+
+
 
 
 def read_results(tsv_file):
