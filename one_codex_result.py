@@ -1,3 +1,6 @@
+"""
+Unoffical!
+"""
 class OneCodexResult:
 
 	def __init__(self,header,tax,hits,read_length,raw_kmer_chain):

@@ -3,6 +3,7 @@
 remapper.py
 Kyle McChesney
 
+Unoffical script for working with One Codex results files
 
 """
 
