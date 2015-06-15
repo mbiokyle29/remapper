@@ -8,6 +8,7 @@ Unoffical script for working with One Codex results files
 """
 
 import logging, argparse, os, itertools
+import pp
 from one_codex_result import OneCodexResult
 
 
@@ -42,11 +43,12 @@ def main():
     parser.add_argument("--tsv", help="Fullpath to the One Codex results file", required=True)
     parser.add_argument("--fastq", help="Fullpath to the original FASTQ file which was uploaded", required=True)
     parser.add_argument("--threads", help="Number of worker threads for processing results", default=1, type=int)
-    parser.add_argument("--contains-ids", help="Conditionally select results which contain a given TAX ID", nargs='+')
-    parser.add_argument("--or", help="treats the ids from contains-ids as OR", default=False)
-    parser.add_argument("--min-matched", help="Percentage of the read which matched given TAX id(s)", type=float)
+    parser.add_argument("--contains-ids", help="Conditionally select results which contain a given TAX ID", nargs='+', type=int)
+    parser.add_argument("--is-or", help="treats the ids from contains-ids as OR", default=False)
+    parser.add_argument("--min-matched", help="Percentage of the read which matched given TAX id(s)", type=float, default=1.0)
 
     args = parser.parse_args()
+
     log.info(" remapper running with TSV: %s and FASTQ: %s", args.tsv, args.fastq)
 
     # read the results
@@ -55,26 +57,53 @@ def main():
     log.info(" Read in %i results", len(results))
 
     # split the results and pass off to workers
-    split_results(results, args.threads)
+    chunks = split_results(results, args.threads)
+
+    # set up pp stuff
+    ppservers = ()
+    job_server = pp.Server(args.threads, ppservers=ppservers)
+    
+    # start up the jobs
+    jobs = []
+    for chunk in chunks:
+        jobs.append(job_server.submit(search, (chunk, args.contains_ids, args.is_or, args.min_matched)))
+
+    job_server.wait()
+
+    matching = []
+    for job in jobs:
+        res = job()
+        if len(res) != 0:
+            matching.append(res) 
+
+    print matching
 
 def split_results(results, count):
     
-    # store the new pieces here
-    chunks = []
-
-    # get chunks-1 equal sized chunks + one mod remainder sized
+    # if there is a remainder, we redistribute those pieces back into the rest 
     remainder = len(results) % count
-    count -= 1
+    unequal = None
+    if remainder != 0:
 
-    # grab the unequal piece and add it
-    chunks.append(results[0:remainder])
+        # grab the unequal piece and take it out
+        unequal = results[0:remainder]
 
-    # remove it from the main list
-    results = results[:-remainder]
+        # remove it from the main list
+        results = results[:-remainder]
 
+    # calc the size of the equal sized lists
+    equal_length = len(results) / count
 
+    chunks = [results[i:i+equal_length] for i in range(0,count) ]
 
+    # front load them
+    if unequal is not None:
+        i = 0
+        for element in unequal:
+            chunks[i].append(element)
+            i += 1
 
+    return chunks
 
 def read_results(tsv_file):
     
@@ -82,7 +111,6 @@ def read_results(tsv_file):
     
     # make sure the file exists
     if not os.path.isfile(tsv_file):
-        print "NOT A FILE"
         log.warn("%s is not a file!", tsv_file)
         raise SystemExit
 
@@ -103,7 +131,40 @@ def read_results(tsv_file):
     return result_objs
 
 # pass the conditions in as a list of functions on results
-#def search(results, conditions):
+# contains_ids = []   - list of IDS we are looking for in the kmer chain
+# or = Boolean        - if our ids is more than one, then the matches can either be AND (matches for all ids) or OR (at least one)
+# min-matched = float - percentage of the total read which must have been matched
+def search(results, ids, is_or, cutoff):
+    
+    # store matches in here
+    matching_results = []
+
+    # iterate through all the chunks
+    for result in results:
+        
+        # create data structure to store kmer stats
+        # dict{id} --> hit count
+        stats = { id: 0 for id in ids}
+
+        # iterate over the expanded k-mer chain
+        for base in result.kmer_chain:
+            if base in stats:
+                stats[base] += 1
+
+        # check if conditions are met
+        all_met = True
+        one_met = False
+
+        for id in ids:
+            if stats[id]/result.read_length >= cutoff:
+                one_met = True
+            else:
+                all_met = False
+
+        if all_met or (one_met and is_or):
+            matching_results.append(result)
+
+    return matching_results
 
 if __name__ == "__main__":
     main()
