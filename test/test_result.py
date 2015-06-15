@@ -6,7 +6,7 @@ Kyle McChesney
 
 """
 from one_codex_result import OneCodexResult
-from remapper import read_results, split_results
+from remapper import read_results, split_results, search
 import unittest
 import os
 
@@ -20,6 +20,10 @@ class TestOneCodexResult(unittest.TestCase):
     fake_file_results = 75
     fake_threads_divise = 5
     fake_threads_uneven = 6
+    fake_ids = [0,11856,99999999999,9606]
+    fake_is_or = True
+    fake_search_file = "/home/kyle/Dev/remapper/test/search_test.tsv"
+    fake_search_ids = [99999999999,88888888888]
 
     def test_expanding_chain(self):
         result = OneCodexResult(self.fake_header, self.fake_id, 
@@ -27,12 +31,12 @@ class TestOneCodexResult(unittest.TestCase):
         self.assertEqual(result.kmer_chain,[1,2,3,3,4,5,5,5,5,5])
 
     def test_parseing_tsv(self):
-        array = read_results(self.fake_file)
+        array = read_results(self.fake_file, self.fake_ids, self.fake_is_or)
         self.assertEqual(len(array), self.fake_file_results)
         self.assertTrue(isinstance(array[0], OneCodexResult))
 
     def test_split_array_divisor(self):
-        array = read_results(self.fake_file)
+        array = read_results(self.fake_file, self.fake_ids, self.fake_is_or)
 
         # we have 75 results so first try with 5 chunks
         five_chunks = split_results(array, self.fake_threads_divise)
@@ -43,7 +47,7 @@ class TestOneCodexResult(unittest.TestCase):
             self.assertEqual(len(chunk),15) 
 
     def test_split_array_mod(self):
-        array = read_results(self.fake_file)
+        array = read_results(self.fake_file, self.fake_ids, self.fake_is_or)
         
         six_chunks = split_results(array, self.fake_threads_uneven)
         
@@ -64,6 +68,15 @@ class TestOneCodexResult(unittest.TestCase):
                 self.assertEqual(len(six_chunks[i]), front_loaded_size)
             else:
                 self.assertEqual(len(six_chunks[i]), equal_size)
-            
+    
+    def test_search(self):
+        array_with_one_match = read_results(self.fake_search_file, self.fake_search_ids, self.fake_is_or)
+        matching = search(array_with_one_match, [99999999999], self.fake_is_or, 1)
+        self.assertEqual(len(matching), 1)
+
+        array_with_no_match = read_results(self.fake_search_file, self.fake_search_ids, False)
+        none = search(array_with_no_match, [99999999999], self.fake_is_or, 1)
+        self.assertEqual(len(none), 0)
+
 if __name__ == '__main__':
     unittest.main()

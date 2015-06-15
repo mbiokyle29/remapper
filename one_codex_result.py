@@ -23,18 +23,23 @@ class OneCodexResult:
 		# each chunk is id|size*
 		# size is relative to the next chunk size
 		for chunk in chunks:
-			next_id, next_size = chunk.split(":")
+			try:
+				next_id, next_size = chunk.split(":")
 			
-			next_id = int(next_id)
-			next_size = int(next_size)
+				next_id = int(next_id)
+				next_size = int(next_size)
+	
+				# extend the current frag into the array
+				if curr_id is not None and curr_size is not None:
+					full_chain.extend([curr_id] * (next_size - curr_size))
+	
+				# update pointers
+				curr_id = next_id
+				curr_size = next_size
 
-			# extend the current frag into the array
-			if curr_id is not None and curr_size is not None:
-				full_chain.extend([curr_id] * (next_size - curr_size))
-
-			# update pointers
-			curr_id = next_id
-			curr_size = next_size
+			except (ValueError, UnboundLocalError) as e:		
+				print "Caught error with {}".format(chunk)
+				continue
 		
 		# the last tax id fills to the end of the read
 		left_over = self.read_length - len(full_chain)

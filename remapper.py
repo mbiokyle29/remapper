@@ -53,7 +53,7 @@ def main():
 
     # read the results
     log.info(" reading in One Codex results...")
-    results = read_results(args.tsv)
+    results = read_results(args.tsv, args.contains_ids, args.is_or)
     log.info(" Read in %i results", len(results))
 
     # split the results and pass off to workers
@@ -111,7 +111,7 @@ def split_results(results, count):
 
     return chunks
 
-def read_results(tsv_file):
+def read_results(tsv_file, ids, is_or):
     
     result_objs = []
     
@@ -131,6 +131,10 @@ def read_results(tsv_file):
         for line in tsv:
             header, tax, hits, read_length, chain = line.split("\t")
             chain = chain.rstrip()
+
+            if not precheck_result(chain, ids, is_or):
+                continue
+                
             result = OneCodexResult(header, int(tax), int(hits), int(read_length), chain)
             result_objs.append(result)
 
@@ -200,6 +204,19 @@ def find_fastqs(headers, fastq_file):
                 next(fastq, None)
 
     return fastqs
+
+
+def precheck_result(chain, tax_ids, is_or):
+
+    contains_one = False
+    contains_all = True
+    for id in tax_ids:
+        if "{}:".format(id) in chain:
+            contains_one = True
+        else:
+            contains_all = False
+
+    return contains_all or contains_one and is_or
 
 if __name__ == "__main__":
     main()
