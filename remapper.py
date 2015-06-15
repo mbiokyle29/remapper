@@ -72,12 +72,18 @@ def main():
 
     matching = []
     for job in jobs:
-        res = job()
-        if len(res) != 0:
-            matching.append(res) 
+        for result in job():
+            matching.append(result.header)
 
-    print matching
+    log.info("Found %i results which matched", len(matching))
 
+    fastqs = find_fastqs(matching, args.fastq)
+
+    # write the result
+    with open("remapper-results.fastq", "w") as out:
+        for line in fastqs:
+            out.write(line)
+    
 def split_results(results, count):
     
     # if there is a remainder, we redistribute those pieces back into the rest 
@@ -165,6 +171,35 @@ def search(results, ids, is_or, cutoff):
             matching_results.append(result)
 
     return matching_results
+
+
+def find_fastqs(headers, fastq_file):
+
+    fastqs = []
+    
+    # make sure the file exists
+    if not os.path.isfile(fastq_file):
+        log.warn("%s is not a file!", fastq_file)
+        raise SystemExit
+
+    # read it
+    with open(fastq_file, "r") as fastq:
+
+        for line in fastq:
+
+            if line.rstrip() in headers:
+                fastqs.append(line)
+                fastqs.append(next(fastq, None))
+                fastqs.append(next(fastq, None))
+                fastqs.append(next(fastq, None))
+            
+            else:
+                # skip to the next header
+                next(fastq, None)
+                next(fastq, None)
+                next(fastq, None)
+
+    return fastqs
 
 if __name__ == "__main__":
     main()
